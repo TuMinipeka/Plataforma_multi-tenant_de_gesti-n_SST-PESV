@@ -151,6 +151,12 @@ ejemplo...). Si aparecen esas tablas y no aparece la palabra `ERROR`, todo carg�
 > Este segundo comando se puede volver a ejecutar las veces que quieras: el script se limpia y se
 > reconstruye solo cada vez, así que no hay riesgo de "romper" nada si lo corres dos veces.
 
+Dentro de ese mismo archivo, cada vista, procedimiento, función y trigger trae **justo debajo su
+propia prueba** (un `SELECT`, un `CALL`, o un bloque envuelto en `BEGIN; ... ROLLBACK;` cuando
+modifica datos) para demostrar que funciona. Por eso en la salida vas a ver, entre las tablas de
+resultados, mensajes como `NOTICE: Correcto, el trigger bloqueo el INSERT: ...` — son parte de las
+pruebas, no errores.
+
 ---
 
 ## 6. Ver la base de datos con pgAdmin (opcional, con interfaz gráfica)
@@ -173,6 +179,36 @@ Si prefieres ver las tablas con clics en vez de comandos:
 
 *(Esto es lo mismo que se explica con más detalle, para conectarte a un PostgreSQL que no sea el
 tuyo propio, en [`05_dia_del_examen.md`](05_dia_del_examen.md).)*
+
+---
+
+## 6.5. Ver la base de datos por terminal (`psql`), sin pgAdmin
+
+Si prefieres escribir las consultas directo en la terminal en vez de usar pgAdmin, entras al
+`psql` que corre **dentro** del contenedor (mismo comando en Windows, Mac y Linux):
+
+```bash
+docker exec -it sst_pesv_db psql -U sst_admin -d examen
+```
+
+Quedas en el prompt `examen=#`. Comandos útiles una vez adentro:
+
+```
+\dt                listar las 20 tablas
+\d nombre_tabla    ver columnas, tipos y restricciones de una tabla
+\df                listar las funciones y procedimientos
+\dv                listar las vistas
+\x                 alternar salida "expandida" (mejor para filas anchas)
+\q                 salir
+```
+
+Las consultas se escriben normal, terminando en `;`, por ejemplo:
+
+```sql
+SELECT tenant_name, contact_email FROM tenants WHERE is_active;
+CALL sp_contar_plantillas_tenant(1);
+SELECT * FROM fn_modulos_habilitados_tenant(1);
+```
 
 ---
 

@@ -99,11 +99,22 @@ Windows, Mac y Linux):
 docker cp sql/00_examen_completo.sql sst_pesv_db:/tmp/00_examen_completo.sql
 docker exec -i sst_pesv_db psql -U sst_admin -d examen -f /tmp/00_examen_completo.sql
 ```
+Entrar a PostgreSQL desde Terminal:
+
+```bash
+docker exec -it sst_pesv_db psql -U sst_admin -d examen
+```
 
 El script es idempotente: empieza limpiando cualquier objeto previo, así que se puede volver a
 ejecutar completo las veces que haga falta sin que falle por "ya existe". Al terminar imprime un
 resumen (conteo de filas por tabla y una muestra de las vistas) para confirmar que todo cargó
 bien.
+
+Además, justo debajo de cada vista, procedimiento, función y trigger hay una llamada de prueba
+(`SELECT`, `CALL`, o un bloque `BEGIN; ... ROLLBACK;` cuando modifica datos) que lo ejecuta y
+confirma que funciona, así que al cargar el archivo ya quedan todos verificados sin pasos
+adicionales. Detalle en
+[`docs/07_procedimientos_funciones_triggers.md`](docs/07_procedimientos_funciones_triggers.md).
 
 ### Establece la conexion con pgAdmin
 

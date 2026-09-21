@@ -4,6 +4,14 @@ Los tres archivos se escribieron con PL/pgSQL sencillo — parámetros, variable
 subconsultas directas — sin trucos que sean difíciles de reproducir a mano. Cada uno se probó
 contra una base recién montada, con el caso que debe fallar y el caso que debe pasar.
 
+> **Las pruebas ya están dentro de los archivos `.sql`.** Justo debajo de cada `CREATE VIEW`,
+> `CREATE PROCEDURE`, `CREATE FUNCTION` y `CREATE TRIGGER` hay una llamada de ejemplo que la usa
+> (`SELECT`, `CALL`, o un bloque `BEGIN; ... ROLLBACK;` cuando la prueba modifica datos), así que
+> al cargar `sql/00_examen_completo.sql` — por pgAdmin o por terminal, ver
+> [`00_instalar_docker.md`](00_instalar_docker.md) — quedan ejecutadas automáticamente y puedes ver
+> sus resultados en la salida, sin escribir nada aparte. Las llamadas que modifican datos siempre
+> terminan en `ROLLBACK`, así que no dejan cambios permanentes ni afectan los datos de prueba.
+
 ## Procedimiento vs. función, en una frase
 
 Un **procedimiento** se invoca con `CALL` y no se puede usar dentro de un `SELECT`; una
