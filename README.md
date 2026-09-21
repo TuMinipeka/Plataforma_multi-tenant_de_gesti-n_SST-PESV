@@ -105,6 +105,16 @@ ejecutar completo las veces que haga falta sin que falle por "ya existe". Al ter
 resumen (conteo de filas por tabla y una muestra de las vistas) para confirmar que todo cargó
 bien.
 
+### Establece la conexion con pgAdmin
+
+```bash
+Host name/adress: Postgres
+Port: 5432
+Maintance database: examen
+Username: sst_admin
+```
+
+
 ### Apagar el entorno
 
 ```bash
