@@ -59,6 +59,9 @@ mismo diseño que implementa `sql/01_schema.sql`.
 - **Vistas y vistas materializadas** para los reportes de seguimiento más frecuentes (personas
   por empresa, geografía, módulos habilitados, resumen de cumplimiento documental por sistema).
   Ver [`docs/04_vistas.md`](docs/04_vistas.md).
+- **15 procedimientos, 8 funciones y 15 triggers** en PL/pgSQL, todos probados con su caso que
+  debe fallar y su caso que debe pasar. Ver
+  [`docs/07_procedimientos_funciones_triggers.md`](docs/07_procedimientos_funciones_triggers.md).
 
 ## Cómo levantar el entorno con Docker
 
@@ -87,9 +90,10 @@ Esto crea dos contenedores:
 
 ### Cargar el esquema y los datos de prueba
 
-Todo el montaje (tablas, restricciones, índices, datos de ejemplo y vistas) vive en **un solo
-archivo**, pensado para pegarse completo en el *Query Tool* de pgAdmin o copiarse al contenedor y
-ejecutarse por terminal (dos comandos, iguales en Windows, Mac y Linux):
+Todo el montaje (tablas, restricciones, índices, datos de ejemplo, vistas, procedimientos,
+funciones y triggers) vive en **un solo archivo**, pensado para pegarse completo en el *Query
+Tool* de pgAdmin o copiarse al contenedor y ejecutarse por terminal (dos comandos, iguales en
+Windows, Mac y Linux):
 
 ```bash
 docker cp sql/00_examen_completo.sql sst_pesv_db:/tmp/00_examen_completo.sql
@@ -126,17 +130,21 @@ examen-sst-pesv/
 │   ├── 03_modelo_fisico.md      Traducción a tablas, restricciones e índices
 │   ├── 04_vistas.md             Vistas y vistas materializadas
 │   ├── 05_dia_del_examen.md     Cómo conectar pgAdmin/terminal a un PostgreSQL ya entregado
-│   └── 06_repaso_consultas_basicas.md  Repaso teórico de SELECT/WHERE/JOIN/etc.
+│   ├── 06_repaso_consultas_basicas.md  Repaso teórico de SELECT/WHERE/JOIN/etc.
+│   └── 07_procedimientos_funciones_triggers.md  Detalle de cada procedimiento/función/trigger
 ├── modelos/
 │   ├── MODELO_CONCEPTUAL.drawio Modelo conceptual editable (app.diagrams.net)
 │   ├── conceptual.png           Modelo conceptual exportado
 │   └── relacional.png           Modelo relacional exportado
 └── sql/
-    ├── 00_examen_completo.sql   Archivo único: esquema + datos + vistas (idempotente)
+    ├── 00_examen_completo.sql   Archivo único: esquema + datos + vistas + PL/pgSQL (idempotente)
     ├── 00_reset.sql             Limpieza idempotente (parte del archivo único)
     ├── 01_schema.sql            Tablas, restricciones e índices
     ├── 02_seed.sql              Datos de prueba: 4 empresas, catálogos completos
     ├── 03_vistas.sql            Vistas y vistas materializadas
+    ├── 04_procedimientos.sql    15 procedimientos almacenados
+    ├── 05_funciones.sql         8 funciones almacenadas
+    ├── 06_triggers.sql          15 triggers
     ├── 07_consultas_basicas.sql       Consultas con SELECT/WHERE/ORDER BY/LIKE/IN/BETWEEN
     ├── 08_consultas_intermedias.sql   Consultas con JOIN, GROUP BY, HAVING
     ├── 09_consultas_avanzadas.sql     Subconsultas, CTE, funciones de ventana
@@ -155,6 +163,18 @@ prueba incluidos:
 | Avanzadas | [`sql/09_consultas_avanzadas.sql`](sql/09_consultas_avanzadas.sql) | Subconsultas, CTE, funciones de ventana (`RANK`, `ROW_NUMBER`, `SUM() OVER`), agregación condicional |
 | Vistas | [`sql/10_consultas_vistas.sql`](sql/10_consultas_vistas.sql) | Consultas apoyadas en las vistas y vistas materializadas, incluido `REFRESH MATERIALIZED VIEW` |
 
+## Procedimientos, funciones y triggers
+
+También probados contra los datos de prueba, con el caso que debe fallar y el caso que debe
+pasar. Detalle completo, con el motivo de cada regla, en
+[`docs/07_procedimientos_funciones_triggers.md`](docs/07_procedimientos_funciones_triggers.md).
+
+| Objeto | Archivo | Contenido |
+|---|---|---|
+| Procedimientos | [`sql/04_procedimientos.sql`](sql/04_procedimientos.sql) | 15 procedimientos: registrar/trasladar personas, habilitar módulos y sistemas, calcular cumplimiento, manejo de excepciones |
+| Funciones | [`sql/05_funciones.sql`](sql/05_funciones.sql) | 8 funciones, incluidas 2 tabulares (`RETURNS TABLE`) |
+| Triggers | [`sql/06_triggers.sql`](sql/06_triggers.sql) | 15 triggers: `updated_at` automático, validaciones de negocio, auditoría, limpieza de bloqueos vencidos |
+
 ## Datos de prueba
 
 `02_seed.sql` carga un escenario realista con 4 empresas colombianas de distintos tamaños y
@@ -165,9 +185,10 @@ para que las consultas de seguimiento y cumplimiento tengan resultados reales qu
 
 ## Alcance actual
 
-Implementado: modelo conceptual, modelo relacional, modelo físico, datos de prueba, vistas y
-vistas materializadas, y las baterías de consultas básicas, intermedias, avanzadas y orientadas a
-vistas. Pendiente: procedimientos almacenados, funciones y triggers.
+Todas las secciones del enunciado están implementadas: modelo conceptual, modelo relacional,
+modelo físico, datos de prueba, vistas y vistas materializadas, procedimientos almacenados,
+funciones, triggers, y las cuatro baterías de consultas (básicas, intermedias, avanzadas y
+orientadas a vistas).
 
 ## Tecnologías
 
