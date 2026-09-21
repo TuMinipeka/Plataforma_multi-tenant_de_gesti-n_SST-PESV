@@ -1,13 +1,4 @@
 -- =====================================================================
---  EXAMEN SST/PESV - ARCHIVO UNICO DE MONTAJE
---  Uso: pgAdmin -> Query Tool -> pegar todo este archivo -> Execute (F5)
---       o en terminal: psql -h <host> -p <puerto> -U <usuario> -d <bd> -f 00_examen_completo.sql
---  No requiere CREATE DATABASE: corre dentro de la base que ya te den.
---  Es idempotente: se puede volver a ejecutar completo si algo sale mal.
--- =====================================================================
-
--- ############################## 0. RESET ##############################
--- =====================================================================
 --  Reset idempotente: deja la base limpia sin necesitar CREATE/DROP DATABASE
 --  (util cuando NO tienes permiso de superusuario para recrear la base,
 --  como en el equipo/profesor del examen: solo te dan una base ya creada).
@@ -51,8 +42,6 @@ DROP TABLE IF EXISTS
 CASCADE;
 
 DROP TYPE IF EXISTS document_status;
-
--- ############################## 1. ESQUEMA ##############################
 -- =====================================================================
 --  Examen SST/PESV - Paso 3: Modelo fisico
 --  Motor   : PostgreSQL 16
@@ -386,8 +375,6 @@ COMMENT ON COLUMN persons.id_tenant   IS 'Redundancia controlada frente a positi
 COMMENT ON COLUMN persons.id_position IS 'NULL mientras la persona no tenga cargo';
 COMMENT ON COLUMN documents.finalized_at IS 'Obligatorio si y solo si document_status = finalizado';
 COMMENT ON COLUMN tenant_audit.id_tenant IS 'Sin FK: la bitacora conserva el id aunque la empresa se elimine';
-
--- ############################## 2. DATOS DE PRUEBA ##############################
 -- =====================================================================
 --  Examen SST/PESV - Paso 3: Datos de prueba (seed)
 --  Base de datos : examen   (esquema public)
@@ -729,13 +716,14 @@ UNION ALL SELECT 'editing_locks', COUNT(*) FROM editing_locks
 UNION ALL SELECT 'tenant_audit', COUNT(*) FROM tenant_audit
 UNION ALL SELECT 'compliance_indicators', COUNT(*) FROM compliance_indicators
 ORDER BY 1;
-
--- ############################## 3. VISTAS ##############################
 -- =====================================================================
 --  Examen SST/PESV - Paso 4: Vistas y vistas materializadas
 --  Base de datos : examen   (esquema public)
 --  Cubre la seccion "Consultas orientadas a vistas y vistas materializadas"
 --  del enunciado (items 1-8) y sirve de base a las avanzadas 10, 22 y 25.
+--
+--  Debajo de cada vista hay una consulta de prueba (solo SELECT, no
+--  modifica datos) que la usa, para comprobar que funciona correctamente.
 -- =====================================================================
 
 BEGIN;
@@ -765,6 +753,12 @@ LEFT JOIN positions po ON po.id_position = p.id_position;
 COMMENT ON VIEW vw_tenant_persons IS
     'Empresas con sus personas y el cargo que ocupan (LEFT JOIN: incluye personas sin cargo aun)';
 
+-- Prueba: personas de Constructora Andina con su cargo
+SELECT full_name, position_name
+FROM vw_tenant_persons
+WHERE tenant_nit = '900111222-3'
+ORDER BY full_name;
+
 -- ---------------------------------------------------------------------
 -- 2. vw_tenant_geography
 --    Empresa con municipio, departamento y pais.
@@ -783,6 +777,11 @@ JOIN countries c        ON c.id_country = d.id_country;
 
 COMMENT ON VIEW vw_tenant_geography IS
     'Ubicacion geografica completa de cada empresa (municipio, departamento, pais)';
+
+-- Prueba: ubicacion de todas las empresas
+SELECT tenant_name, municipality_name, department_name, country_name
+FROM vw_tenant_geography
+ORDER BY tenant_name;
 
 -- ---------------------------------------------------------------------
 -- 3. vw_tenant_modules
@@ -805,6 +804,12 @@ JOIN type_system_sst ts ON ts.id_type_system_sst = m.id_type_system_sst;
 
 COMMENT ON VIEW vw_tenant_modules IS
     'Modulos habilitados por cada empresa, con el sistema de gestion al que pertenecen';
+
+-- Prueba: modulos SST habilitados para Transportes del Valle
+SELECT module_title, is_enabled
+FROM vw_tenant_modules
+WHERE tenant_name = 'Transportes del Valle Ltda' AND system_code = 'SST'
+ORDER BY module_title;
 
 -- ---------------------------------------------------------------------
 -- 4. vw_tenant_templates_phva
@@ -829,6 +834,11 @@ ORDER BY t.tenant_name, ph.phva_stage_order;
 COMMENT ON VIEW vw_tenant_templates_phva IS
     'Total de plantillas activas asignadas a cada empresa, agrupadas por etapa PHVA';
 
+-- Prueba: plantillas por etapa PHVA de todas las empresas
+SELECT tenant_name, phva_stage_name, total_templates
+FROM vw_tenant_templates_phva
+ORDER BY tenant_name, phva_stage_name;
+
 -- ---------------------------------------------------------------------
 -- 5. vw_tenant_positions
 --    Total de personas por empresa y cargo.
@@ -849,6 +859,11 @@ ORDER BY t.tenant_name, po.position_name;
 COMMENT ON VIEW vw_tenant_positions IS
     'Total de personas registradas por empresa y cargo (LEFT JOIN: incluye cargos sin nadie asignado)';
 
+-- Prueba: cargos y cuantas personas tiene cada uno, por empresa
+SELECT tenant_name, position_name, total_persons
+FROM vw_tenant_positions
+ORDER BY tenant_name, position_name;
+
 -- ---------------------------------------------------------------------
 -- 6. vw_tenant_summary
 --    Vista de apoyo (no pedida explicitamente, pero la usan las avanzadas
@@ -868,6 +883,11 @@ FROM tenants t;
 
 COMMENT ON VIEW vw_tenant_summary IS
     'Consolidado por empresa: personas, modulos habilitados, plantillas activas y sistemas habilitados';
+
+-- Prueba: resumen de las 4 empresas
+SELECT tenant_name, is_active, total_persons, total_modules, total_templates, total_systems
+FROM vw_tenant_summary
+ORDER BY tenant_name;
 
 -- =====================================================================
 -- Vistas materializadas
@@ -913,6 +933,11 @@ CREATE INDEX ix_vm_template_sst_docs_summary_pct
 COMMENT ON MATERIALIZED VIEW vm_template_sst_docs_summary IS
     'Resumen consolidado de documentos del sistema SST por empresa (total/finalizados/borrador/pendientes/no iniciados/porcentaje)';
 
+-- Prueba: cumplimiento SST de todas las empresas, de menor a mayor
+SELECT tenant_name, total_docs, finalized_docs, compliance_percentage
+FROM vm_template_sst_docs_summary
+ORDER BY compliance_percentage;
+
 -- ---------------------------------------------------------------------
 -- 8. vm_template_pesv_docs_summary
 --    Igual que la anterior, pero para el sistema PESV.
@@ -950,10 +975,15 @@ CREATE INDEX ix_vm_template_pesv_docs_summary_pct
 COMMENT ON MATERIALIZED VIEW vm_template_pesv_docs_summary IS
     'Resumen consolidado de documentos del sistema PESV por empresa (total/finalizados/borrador/pendientes/no iniciados/porcentaje)';
 
+-- Prueba: cumplimiento PESV de todas las empresas, de mayor a menor
+SELECT tenant_name, total_docs, finalized_docs, compliance_percentage
+FROM vm_template_pesv_docs_summary
+ORDER BY compliance_percentage DESC;
+
 COMMIT;
 
 -- =====================================================================
--- Verificacion rapida
+-- Verificacion rapida (resumen de todo lo anterior en un solo bloque)
 -- =====================================================================
 \echo === vw_tenant_persons (muestra) ===
 SELECT tenant_name, full_name, position_name FROM vw_tenant_persons ORDER BY tenant_name LIMIT 5;
@@ -966,12 +996,18 @@ SELECT * FROM vm_template_sst_docs_summary ORDER BY tenant_name;
 
 \echo === vm_template_pesv_docs_summary ===
 SELECT * FROM vm_template_pesv_docs_summary ORDER BY tenant_name;
-
--- ############################## 4. PROCEDIMIENTOS ALMACENADOS ##############################
 -- =====================================================================
 --  Examen SST/PESV - Procedimientos almacenados (enunciado, seccion 5)
 --  PL/pgSQL simple: parametros, variables, IF, RAISE, manejo de
 --  excepciones y operaciones transaccionales basicas.
+--
+--  Debajo de cada procedimiento hay una llamada de prueba envuelta en
+--  BEGIN; ... ROLLBACK; para comprobar que funciona sin dejar cambios
+--  permanentes (asi el archivo se puede re-ejecutar las veces que haga
+--  falta sin ensuciar los datos de prueba). Los identificadores que
+--  necesita cada CALL se buscan primero con SELECT ... \gset, porque
+--  PostgreSQL no permite subconsultas directamente dentro de los
+--  argumentos de un CALL.
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
@@ -1001,6 +1037,17 @@ BEGIN
 END;
 $$;
 
+-- Prueba: registrar una organizacion nueva y confirmar que quedo
+SELECT id_municipality FROM municipalities WHERE municipality_name = 'Medellin' \gset
+SELECT id_tenant_size FROM tenant_sizes WHERE tenant_size_code = 'SMALL' \gset
+BEGIN;
+CALL sp_registrar_tenant(
+    '900999000-1', 'Empresa de Prueba SAS', 'contacto@prueba.com', '3000000000', 'Cl 1 # 1-1',
+    :id_municipality, :id_tenant_size
+);
+SELECT tenant_name FROM tenants WHERE tenant_nit = '900999000-1';
+ROLLBACK;
+
 -- ---------------------------------------------------------------------
 -- 2. Registrar una nueva persona y asociarla a una organizacion y a
 --    un cargo determinado.
@@ -1023,6 +1070,16 @@ BEGIN
 END;
 $$;
 
+-- Prueba: registrar una persona nueva en Constructora Andina
+SELECT id_tenant FROM tenants WHERE tenant_nit = '900111222-3' \gset
+SELECT id_position FROM positions WHERE position_name = 'Supervisor de Obra' AND id_tenant = :id_tenant \gset
+BEGIN;
+CALL sp_registrar_persona(
+    :id_tenant, :id_position, '99999999', 'Prueba', 'Apellido', 'prueba@constructoraandina.com.co', '3000000001'
+);
+SELECT first_name, last_name FROM persons WHERE person_identification = '99999999';
+ROLLBACK;
+
 -- ---------------------------------------------------------------------
 -- 3. Cambiar el estado de una organizacion entre activa e inactiva.
 -- ---------------------------------------------------------------------
@@ -1042,6 +1099,13 @@ BEGIN
     END IF;
 END;
 $$;
+
+-- Prueba: reactivar temporalmente a Logistica Rapida (esta inactiva en la semilla)
+SELECT id_tenant FROM tenants WHERE tenant_nit = '900777888-9' \gset
+BEGIN;
+CALL sp_cambiar_estado_tenant(:id_tenant, TRUE);
+SELECT tenant_name, is_active FROM tenants WHERE tenant_nit = '900777888-9';
+ROLLBACK;
 
 -- ---------------------------------------------------------------------
 -- 4. Asignar un modulo a una organizacion, evitando asignaciones
@@ -1066,6 +1130,15 @@ BEGIN
 END;
 $$;
 
+-- Prueba: asignar a Textiles Bogota un modulo PESV que todavia no tiene
+SELECT id_tenant FROM tenants WHERE tenant_nit = '900555666-7' \gset
+SELECT id_module FROM modules WHERE module_title = 'Plan de Accion PESV' \gset
+BEGIN;
+CALL sp_asignar_modulo(:id_tenant, :id_module);
+SELECT module_title FROM vw_tenant_modules
+WHERE tenant_name = 'Textiles Bogota S.A.' AND module_title = 'Plan de Accion PESV';
+ROLLBACK;
+
 -- ---------------------------------------------------------------------
 -- 5. Habilitar un sistema SST para una organizacion determinada.
 -- ---------------------------------------------------------------------
@@ -1087,6 +1160,16 @@ BEGIN
     VALUES (p_id_tenant, p_id_type_system_sst, TRUE);
 END;
 $$;
+
+-- Prueba: habilitar PESV en Textiles Bogota (solo tiene SST habilitado)
+SELECT id_tenant FROM tenants WHERE tenant_nit = '900555666-7' \gset
+SELECT id_type_system_sst FROM type_system_sst WHERE system_code = 'PESV' \gset
+BEGIN;
+CALL sp_habilitar_sistema(:id_tenant, :id_type_system_sst);
+SELECT system_code FROM tenantsystems ts
+JOIN type_system_sst s ON s.id_type_system_sst = ts.id_type_system_sst
+WHERE ts.id_tenant = :id_tenant;
+ROLLBACK;
 
 -- ---------------------------------------------------------------------
 -- 6. Asignar una plantilla a una organizacion indicando el formato
@@ -1117,6 +1200,15 @@ BEGIN
 END;
 $$;
 
+-- Prueba: asignar a Textiles Bogota la plantilla del formato F-PESV-001
+SELECT id_tenant FROM tenants WHERE tenant_nit = '900555666-7' \gset
+SELECT id_format_sst FROM formats_sst WHERE format_code = 'F-PESV-001' \gset
+SELECT id_person FROM persons WHERE person_identification = '52345678' \gset
+BEGIN;
+CALL sp_asignar_plantilla(:id_tenant, :id_format_sst, :id_person);
+SELECT COUNT(*) FROM tenanttemplates WHERE id_tenant = :id_tenant;
+ROLLBACK;
+
 -- ---------------------------------------------------------------------
 -- 7. Cambiar el cargo de una persona dentro de su organizacion.
 -- ---------------------------------------------------------------------
@@ -1136,6 +1228,15 @@ BEGIN
     END IF;
 END;
 $$;
+
+-- Prueba: cambiar el cargo de Jorge Martinez a "Coordinador SST"
+SELECT id_person FROM persons WHERE person_identification = '80123456' \gset
+SELECT id_position FROM positions WHERE position_name = 'Coordinador SST'
+    AND id_tenant = (SELECT id_tenant FROM tenants WHERE tenant_nit = '900111222-3') \gset
+BEGIN;
+CALL sp_cambiar_cargo_persona(:id_person, :id_position);
+SELECT position_name FROM vw_tenant_persons WHERE person_identification = '80123456';
+ROLLBACK;
 
 -- ---------------------------------------------------------------------
 -- 8. Trasladar una persona de una organizacion a otra, actualizando
@@ -1163,6 +1264,14 @@ BEGIN
 END;
 $$;
 
+-- Prueba: trasladar a Luis Torres de Transportes del Valle a Textiles Bogota
+SELECT id_person FROM persons WHERE person_identification = '94512345' \gset
+SELECT id_tenant FROM tenants WHERE tenant_nit = '900555666-7' \gset
+BEGIN;
+CALL sp_trasladar_persona(:id_person, :id_tenant, NULL);
+SELECT tenant_name FROM vw_tenant_persons WHERE person_identification = '94512345';
+ROLLBACK;
+
 -- ---------------------------------------------------------------------
 -- 9. Deshabilitar todos los modulos asociados a una organizacion que
 --    haya sido marcada como inactiva.
@@ -1180,6 +1289,15 @@ BEGIN
     UPDATE tenant_modules SET is_enabled = FALSE WHERE id_tenant = p_id_tenant;
 END;
 $$;
+
+-- Prueba: Logistica Rapida ya esta inactiva en la semilla, asi que el
+-- procedimiento debe deshabilitar sus modulos sin error
+SELECT id_tenant FROM tenants WHERE tenant_nit = '900777888-9' \gset
+BEGIN;
+CALL sp_deshabilitar_modulos_tenant_inactivo(:id_tenant);
+SELECT COUNT(*) FILTER (WHERE is_enabled) AS modulos_aun_habilitados
+FROM tenant_modules WHERE id_tenant = :id_tenant;
+ROLLBACK;
 
 -- ---------------------------------------------------------------------
 -- 10. Eliminar de manera controlada una asignacion de modulo,
@@ -1214,6 +1332,16 @@ BEGIN
 END;
 $$;
 
+-- Prueba: quitarle a Textiles Bogota un modulo que no tiene plantillas
+-- dependientes (Plan de Emergencias, que Textiles todavia no tenia asignado)
+SELECT id_tenant FROM tenants WHERE tenant_nit = '900555666-7' \gset
+SELECT id_module FROM modules WHERE module_title = 'Plan de Emergencias' \gset
+BEGIN;
+CALL sp_asignar_modulo(:id_tenant, :id_module);
+CALL sp_eliminar_asignacion_modulo(:id_tenant, :id_module);
+SELECT COUNT(*) FROM tenant_modules WHERE id_tenant = :id_tenant AND id_module = :id_module;
+ROLLBACK;
+
 -- ---------------------------------------------------------------------
 -- 11. Determinar el numero total de plantillas asociadas a una
 --     organizacion y mostrar el resultado con RAISE NOTICE.
@@ -1230,6 +1358,10 @@ BEGIN
     RAISE NOTICE 'La organizacion % tiene % plantilla(s) asignada(s)', p_id_tenant, v_total;
 END;
 $$;
+
+-- Prueba: contar plantillas de Constructora Andina (mensaje via RAISE NOTICE)
+SELECT id_tenant FROM tenants WHERE tenant_nit = '900111222-3' \gset
+CALL sp_contar_plantillas_tenant(:id_tenant);
 
 -- ---------------------------------------------------------------------
 -- 12. Determinar el porcentaje de cumplimiento documental de una
@@ -1267,6 +1399,10 @@ BEGIN
 END;
 $$;
 
+-- Prueba: cumplimiento de Transportes del Valle (mensaje via RAISE NOTICE)
+SELECT id_tenant FROM tenants WHERE tenant_nit = '900333444-5' \gset
+CALL sp_calcular_cumplimiento_tenant(:id_tenant, NULL);
+
 -- ---------------------------------------------------------------------
 -- 13. Recibir una organizacion y una etapa PHVA y determinar la
 --     cantidad de documentos correspondientes a esa etapa.
@@ -1290,6 +1426,11 @@ BEGIN
         p_id_tenant, p_total, p_id_phva_stage;
 END;
 $$;
+
+-- Prueba: documentos de Constructora Andina en la etapa "Hacer"
+SELECT id_tenant FROM tenants WHERE tenant_nit = '900111222-3' \gset
+SELECT id_phva_stage FROM phva_stages WHERE phva_stage_code = 'H' \gset
+CALL sp_documentos_por_etapa(:id_tenant, :id_phva_stage, NULL);
 
 -- ---------------------------------------------------------------------
 -- 14. Modificar simultaneamente los datos de contacto de una
@@ -1316,6 +1457,15 @@ BEGIN
     END IF;
 END;
 $$;
+
+-- Prueba: actualizar el contacto de Textiles Bogota
+SELECT id_tenant FROM tenants WHERE tenant_nit = '900555666-7' \gset
+BEGIN;
+CALL sp_actualizar_contacto_tenant(
+    :id_tenant, 'nuevo_correo@textilesbogota.co', '6010000000', 'Nueva direccion 100'
+);
+SELECT contact_email, contact_phone FROM tenants WHERE tenant_nit = '900555666-7';
+ROLLBACK;
 
 -- ---------------------------------------------------------------------
 -- 15. Asignar una plantilla con manejo de excepciones: cualquier
@@ -1357,12 +1507,25 @@ EXCEPTION
 END;
 $$;
 
--- ############################## 5. FUNCIONES ALMACENADAS ##############################
+-- Prueba: llamarlo dos veces seguidas con el mismo formato para Textiles
+-- Bogota (que no tiene PESV habilitado, por lo que el formato no le esta
+-- asignado aun) - la primera vez asigna, la segunda debe avisar "ya tenia
+-- asignada esa plantilla" en vez de lanzar un error que interrumpa la sesion
+SELECT id_tenant FROM tenants WHERE tenant_nit = '900555666-7' \gset
+SELECT id_format_sst FROM formats_sst WHERE format_code = 'F-PESV-002' \gset
+SELECT id_person FROM persons WHERE person_identification = '52345678' \gset
+BEGIN;
+CALL sp_asignar_plantilla_segura(:id_tenant, :id_format_sst, :id_person);
+CALL sp_asignar_plantilla_segura(:id_tenant, :id_format_sst, :id_person);
+ROLLBACK;
 -- =====================================================================
 --  Examen SST/PESV - Funciones almacenadas (enunciado, seccion 6)
 --  Diferencia con los procedimientos: una funcion siempre RETURN-a un
 --  valor (o una tabla) y se usa dentro de un SELECT; un procedimiento
 --  se invoca con CALL y no se puede usar dentro de una consulta.
+--
+--  Debajo de cada funcion hay una llamada de prueba (solo SELECT, no
+--  modifica datos) que demuestra que funciona correctamente.
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
@@ -1379,6 +1542,11 @@ BEGIN
     RETURN v_total;
 END;
 $$;
+
+-- Prueba: personas registradas en Constructora Andina
+SELECT fn_total_personas_tenant(
+    (SELECT id_tenant FROM tenants WHERE tenant_nit = '900111222-3')
+) AS total_personas;
 
 -- ---------------------------------------------------------------------
 -- 2. Porcentaje de cumplimiento documental de una organizacion
@@ -1406,6 +1574,11 @@ BEGIN
 END;
 $$;
 
+-- Prueba: porcentaje de cumplimiento de Transportes del Valle
+SELECT fn_porcentaje_cumplimiento_tenant(
+    (SELECT id_tenant FROM tenants WHERE tenant_nit = '900333444-5')
+) AS porcentaje_cumplimiento;
+
 -- ---------------------------------------------------------------------
 -- 3. Determina si una organizacion tiene habilitado un modulo
 --    especifico.
@@ -1421,6 +1594,12 @@ BEGIN
     );
 END;
 $$;
+
+-- Prueba: Constructora Andina, modulo "Plan de Emergencias" (deberia ser TRUE)
+SELECT fn_tenant_tiene_modulo(
+    (SELECT id_tenant FROM tenants WHERE tenant_nit = '900111222-3'),
+    (SELECT id_module FROM modules WHERE module_title = 'Plan de Emergencias')
+) AS tiene_modulo;
 
 -- ---------------------------------------------------------------------
 -- 4. Nombre completo de una persona a partir de su identificador.
@@ -1443,6 +1622,11 @@ BEGIN
 END;
 $$;
 
+-- Prueba: nombre completo de la persona con documento 71234567
+SELECT fn_nombre_completo_persona(
+    (SELECT id_person FROM persons WHERE person_identification = '71234567')
+) AS nombre_completo;
+
 -- ---------------------------------------------------------------------
 -- 5. Cantidad de plantillas existentes para una organizacion y una
 --    etapa PHVA determinada.
@@ -1464,6 +1648,12 @@ BEGIN
 END;
 $$;
 
+-- Prueba: plantillas de Textiles Bogota en la etapa "Planear"
+SELECT fn_total_plantillas_tenant_etapa(
+    (SELECT id_tenant FROM tenants WHERE tenant_nit = '900555666-7'),
+    (SELECT id_phva_stage FROM phva_stages WHERE phva_stage_code = 'P')
+) AS total_plantillas_etapa_p;
+
 -- ---------------------------------------------------------------------
 -- 6. Funcion tabular: todos los modulos habilitados para una
 --    organizacion.
@@ -1482,6 +1672,11 @@ BEGIN
 END;
 $$;
 
+-- Prueba: modulos habilitados de Constructora Andina
+SELECT * FROM fn_modulos_habilitados_tenant(
+    (SELECT id_tenant FROM tenants WHERE tenant_nit = '900111222-3')
+);
+
 -- ---------------------------------------------------------------------
 -- 7. Funcion tabular: personas de una organizacion junto con sus
 --    respectivos cargos.
@@ -1499,6 +1694,11 @@ BEGIN
     ORDER BY p.first_name;
 END;
 $$;
+
+-- Prueba: personas y cargos de Transportes del Valle
+SELECT * FROM fn_personas_cargos_tenant(
+    (SELECT id_tenant FROM tenants WHERE tenant_nit = '900333444-5')
+);
 
 -- ---------------------------------------------------------------------
 -- 8. Clasifica el nivel de cumplimiento de una organizacion como
@@ -1523,12 +1723,21 @@ BEGIN
 END;
 $$;
 
--- ############################## 6. TRIGGERS ##############################
+-- Prueba: nivel de cumplimiento de las 4 empresas, de una vez
+SELECT tenant_name, fn_nivel_cumplimiento_tenant(id_tenant) AS nivel_cumplimiento
+FROM tenants
+ORDER BY tenant_name;
 -- =====================================================================
 --  Examen SST/PESV - Triggers (enunciado, seccion 7)
 --  Cada trigger tiene su propia funcion fn_trg_...() y se declara con
 --  DROP TRIGGER IF EXISTS + CREATE TRIGGER para poder re-ejecutar este
 --  archivo las veces que haga falta sin que falle por "ya existe".
+--
+--  Debajo de cada trigger hay una prueba envuelta en BEGIN; ... ROLLBACK;
+--  para comprobar que funciona sin dejar cambios permanentes. Cuando el
+--  trigger debe impedir una operacion, la prueba usa un bloque DO con
+--  EXCEPTION para capturar el error y mostrarlo con RAISE NOTICE, en vez
+--  de cortar la ejecucion del script.
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
@@ -1550,6 +1759,14 @@ CREATE TRIGGER trg_tenants_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION fn_trg_tenants_updated_at();
 
+-- Prueba: updated_at debe cambiar despues del UPDATE
+BEGIN;
+SELECT updated_at AS updated_at_antes FROM tenants WHERE tenant_nit = '900111222-3' \gset
+UPDATE tenants SET tenant_address = tenant_address WHERE tenant_nit = '900111222-3';
+SELECT (updated_at > :'updated_at_antes'::timestamptz) AS se_actualizo
+FROM tenants WHERE tenant_nit = '900111222-3';
+ROLLBACK;
+
 -- ---------------------------------------------------------------------
 -- 2. Actualizar automaticamente updated_at en persons.
 -- ---------------------------------------------------------------------
@@ -1568,6 +1785,14 @@ CREATE TRIGGER trg_persons_updated_at
     BEFORE UPDATE ON persons
     FOR EACH ROW
     EXECUTE FUNCTION fn_trg_persons_updated_at();
+
+-- Prueba: updated_at debe cambiar despues del UPDATE
+BEGIN;
+SELECT updated_at AS updated_at_antes FROM persons WHERE person_identification = '71234567' \gset
+UPDATE persons SET person_phone = person_phone WHERE person_identification = '71234567';
+SELECT (updated_at > :'updated_at_antes'::timestamptz) AS se_actualizo
+FROM persons WHERE person_identification = '71234567';
+ROLLBACK;
 
 -- ---------------------------------------------------------------------
 -- 3. Impedir registrar una persona en una organizacion inactiva.
@@ -1590,6 +1815,20 @@ CREATE TRIGGER trg_persons_check_tenant_active
     BEFORE INSERT ON persons
     FOR EACH ROW
     EXECUTE FUNCTION fn_trg_persons_check_tenant_active();
+
+-- Prueba: intentar registrar una persona en Logistica Rapida (inactiva) debe fallar
+BEGIN;
+DO $$
+BEGIN
+    INSERT INTO persons (id_tenant, person_identification, first_name, last_name)
+    VALUES ((SELECT id_tenant FROM tenants WHERE tenant_nit = '900777888-9'), '11111111', 'X', 'Y');
+    RAISE NOTICE 'ERROR: no debio permitir el INSERT';
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Correcto, el trigger bloqueo el INSERT: %', SQLERRM;
+END;
+$$;
+ROLLBACK;
 
 -- ---------------------------------------------------------------------
 -- 4. Impedir asignar un modulo que ya se encuentre previamente
@@ -1617,6 +1856,24 @@ CREATE TRIGGER trg_tenant_modules_no_duplicado
     FOR EACH ROW
     EXECUTE FUNCTION fn_trg_tenant_modules_no_duplicado();
 
+-- Prueba: intentar volver a asignar a Constructora Andina un modulo que ya tiene
+BEGIN;
+DO $$
+BEGIN
+    INSERT INTO tenant_modules (id_tenant, id_module, is_enabled)
+    VALUES (
+        (SELECT id_tenant FROM tenants WHERE tenant_nit = '900111222-3'),
+        (SELECT id_module FROM modules WHERE module_title = 'Plan de Emergencias'),
+        TRUE
+    );
+    RAISE NOTICE 'ERROR: no debio permitir el duplicado';
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Correcto, el trigger bloqueo el duplicado: %', SQLERRM;
+END;
+$$;
+ROLLBACK;
+
 -- ---------------------------------------------------------------------
 -- 5. Impedir asignar plantillas a organizaciones inactivas.
 -- ---------------------------------------------------------------------
@@ -1638,6 +1895,24 @@ CREATE TRIGGER trg_tenanttemplates_check_tenant_active
     BEFORE INSERT ON tenanttemplates
     FOR EACH ROW
     EXECUTE FUNCTION fn_trg_tenanttemplates_check_tenant_active();
+
+-- Prueba: intentar asignar una plantilla a Logistica Rapida (inactiva) debe fallar
+BEGIN;
+DO $$
+BEGIN
+    INSERT INTO tenanttemplates (id_tenant, id_template, id_person_updated_by)
+    VALUES (
+        (SELECT id_tenant FROM tenants WHERE tenant_nit = '900777888-9'),
+        (SELECT id_template FROM templates LIMIT 1),
+        NULL
+    );
+    RAISE NOTICE 'ERROR: no debio permitir el INSERT';
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Correcto, el trigger bloqueo el INSERT: %', SQLERRM;
+END;
+$$;
+ROLLBACK;
 
 -- ---------------------------------------------------------------------
 -- 6. Validar que una persona unicamente pueda asociarse a un cargo
@@ -1667,6 +1942,21 @@ CREATE TRIGGER trg_persons_check_position_tenant
     FOR EACH ROW
     EXECUTE FUNCTION fn_trg_persons_check_position_tenant();
 
+-- Prueba: asignarle a una persona de Constructora Andina un cargo de Transportes del Valle
+BEGIN;
+DO $$
+BEGIN
+    UPDATE persons
+    SET id_position = (SELECT id_position FROM positions WHERE position_name = 'Conductor')
+    WHERE person_identification = '71234567';
+    RAISE NOTICE 'ERROR: no debio permitir el cargo de otra organizacion';
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Correcto, el trigger bloqueo el cambio: %', SQLERRM;
+END;
+$$;
+ROLLBACK;
+
 -- ---------------------------------------------------------------------
 -- 7. Registrar automaticamente la fecha de actualizacion cuando se
 --    modifique una plantilla asignada a una organizacion.
@@ -1686,6 +1976,17 @@ CREATE TRIGGER trg_tenanttemplates_updated_at
     BEFORE UPDATE ON tenanttemplates
     FOR EACH ROW
     EXECUTE FUNCTION fn_trg_tenanttemplates_updated_at();
+
+-- Prueba: updated_at debe cambiar despues del UPDATE (trigger 14 exige
+-- indicar el responsable, por eso el UPDATE tambien lo incluye)
+BEGIN;
+SELECT updated_at AS updated_at_antes FROM tenanttemplates LIMIT 1 \gset
+UPDATE tenanttemplates
+SET id_person_updated_by = (SELECT id_person FROM persons LIMIT 1)
+WHERE id_tenant_template = (SELECT id_tenant_template FROM tenanttemplates LIMIT 1);
+SELECT (updated_at > :'updated_at_antes'::timestamptz) AS se_actualizo
+FROM tenanttemplates LIMIT 1;
+ROLLBACK;
 
 -- ---------------------------------------------------------------------
 -- 8. Impedir eliminar una organizacion cuando todavia existan
@@ -1710,6 +2011,19 @@ CREATE TRIGGER trg_tenants_check_no_persons
     FOR EACH ROW
     EXECUTE FUNCTION fn_trg_tenants_check_no_persons();
 
+-- Prueba: intentar borrar Constructora Andina (tiene personas) debe fallar
+BEGIN;
+DO $$
+BEGIN
+    DELETE FROM tenants WHERE tenant_nit = '900111222-3';
+    RAISE NOTICE 'ERROR: no debio permitir el DELETE';
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Correcto, el trigger bloqueo el DELETE: %', SQLERRM;
+END;
+$$;
+ROLLBACK;
+
 -- ---------------------------------------------------------------------
 -- 9. Impedir eliminar un sistema SST cuando existan organizaciones
 --    que lo esten utilizando.
@@ -1732,6 +2046,19 @@ CREATE TRIGGER trg_type_system_check_not_in_use
     BEFORE DELETE ON type_system_sst
     FOR EACH ROW
     EXECUTE FUNCTION fn_trg_type_system_check_not_in_use();
+
+-- Prueba: intentar borrar el sistema SST (en uso por las 4 empresas) debe fallar
+BEGIN;
+DO $$
+BEGIN
+    DELETE FROM type_system_sst WHERE system_code = 'SST';
+    RAISE NOTICE 'ERROR: no debio permitir el DELETE';
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Correcto, el trigger bloqueo el DELETE: %', SQLERRM;
+END;
+$$;
+ROLLBACK;
 
 -- ---------------------------------------------------------------------
 -- 10. Impedir eliminar un modulo cuando este asignado a una o mas
@@ -1756,6 +2083,19 @@ CREATE TRIGGER trg_modules_check_not_in_use
     FOR EACH ROW
     EXECUTE FUNCTION fn_trg_modules_check_not_in_use();
 
+-- Prueba: intentar borrar el modulo "Plan de Emergencias" (asignado) debe fallar
+BEGIN;
+DO $$
+BEGIN
+    DELETE FROM modules WHERE module_title = 'Plan de Emergencias';
+    RAISE NOTICE 'ERROR: no debio permitir el DELETE';
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Correcto, el trigger bloqueo el DELETE: %', SQLERRM;
+END;
+$$;
+ROLLBACK;
+
 -- ---------------------------------------------------------------------
 -- 11. Validar que el porcentaje de cumplimiento de una organizacion
 --     permanezca entre 0 y 100.
@@ -1778,6 +2118,25 @@ CREATE TRIGGER trg_compliance_check_range
     BEFORE INSERT OR UPDATE ON compliance_indicators
     FOR EACH ROW
     EXECUTE FUNCTION fn_trg_compliance_check_range();
+
+-- Prueba: intentar insertar un indicador con 150% debe fallar
+BEGIN;
+DO $$
+BEGIN
+    INSERT INTO compliance_indicators (id_tenant, id_type_system_sst, total_docs, finalized_docs,
+        draft_docs, pending_docs, not_started_docs, compliance_percentage, calculated_at)
+    VALUES (
+        (SELECT id_tenant FROM tenants WHERE tenant_nit = '900111222-3'),
+        (SELECT id_type_system_sst FROM type_system_sst WHERE system_code = 'SST'),
+        10, 15, 0, 0, 0, 150, now()
+    );
+    RAISE NOTICE 'ERROR: no debio permitir el porcentaje fuera de rango';
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Correcto, el trigger bloqueo el valor invalido: %', SQLERRM;
+END;
+$$;
+ROLLBACK;
 
 -- ---------------------------------------------------------------------
 -- 12. Auditoria: registrar en tenant_audit cualquier modificacion de
@@ -1817,6 +2176,14 @@ CREATE TRIGGER trg_tenants_audit_datos
     FOR EACH ROW
     EXECUTE FUNCTION fn_trg_tenants_audit_datos();
 
+-- Prueba: cambiar el correo de Constructora Andina debe dejar rastro en tenant_audit
+BEGIN;
+UPDATE tenants SET contact_email = 'auditoria@constructoraandina.com.co' WHERE tenant_nit = '900111222-3';
+SELECT audited_field, old_value, new_value FROM tenant_audit
+WHERE id_tenant = (SELECT id_tenant FROM tenants WHERE tenant_nit = '900111222-3')
+ORDER BY id_tenant_audit DESC LIMIT 1;
+ROLLBACK;
+
 -- ---------------------------------------------------------------------
 -- 13. Auditoria especifica: guardar el valor anterior y el nuevo
 --     cuando se modifique el estado (activa/inactiva) de una
@@ -1840,6 +2207,15 @@ CREATE TRIGGER trg_tenants_audit_estado
     AFTER UPDATE ON tenants
     FOR EACH ROW
     EXECUTE FUNCTION fn_trg_tenants_audit_estado();
+
+-- Prueba: reactivar Logistica Rapida debe dejar rastro en tenant_audit
+BEGIN;
+UPDATE tenants SET is_active = TRUE WHERE tenant_nit = '900777888-9';
+SELECT audited_field, old_value, new_value FROM tenant_audit
+WHERE id_tenant = (SELECT id_tenant FROM tenants WHERE tenant_nit = '900777888-9')
+  AND audited_field = 'is_active'
+ORDER BY id_tenant_audit DESC LIMIT 1;
+ROLLBACK;
 
 -- ---------------------------------------------------------------------
 -- 14. Exigir que toda modificacion de una plantilla asignada indique
@@ -1865,6 +2241,21 @@ CREATE TRIGGER trg_tenanttemplates_require_responsible
     FOR EACH ROW
     EXECUTE FUNCTION fn_trg_tenanttemplates_require_responsible();
 
+-- Prueba: modificar una plantilla asignada sin indicar responsable debe fallar
+BEGIN;
+DO $$
+BEGIN
+    UPDATE tenanttemplates
+    SET id_person_updated_by = NULL
+    WHERE id_tenant_template = (SELECT id_tenant_template FROM tenanttemplates LIMIT 1);
+    RAISE NOTICE 'ERROR: no debio permitir el UPDATE sin responsable';
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Correcto, el trigger exigio el responsable: %', SQLERRM;
+END;
+$$;
+ROLLBACK;
+
 -- ---------------------------------------------------------------------
 -- 15. Marcar como inactivos los bloqueos de edicion vencidos.
 --     PostgreSQL no ejecuta triggers por horario (no hay un "cron"
@@ -1889,3 +2280,27 @@ CREATE TRIGGER trg_editing_locks_clean_expired
     BEFORE INSERT ON editing_locks
     FOR EACH ROW
     EXECUTE FUNCTION fn_trg_editing_locks_clean_expired();
+
+-- Prueba: un bloqueo vencido debe desactivarse solo al intentar crear uno nuevo
+-- sobre el mismo documento
+BEGIN;
+INSERT INTO editing_locks (id_document, id_person_locked_by, locked_at, lock_expires_at, is_active)
+VALUES (
+    (SELECT id_document FROM documents LIMIT 1),
+    (SELECT id_person FROM persons LIMIT 1),
+    now() - interval '2 hours',
+    now() - interval '1 hour',
+    TRUE
+);
+-- este segundo INSERT dispara el trigger, que primero limpia el vencido de arriba
+INSERT INTO editing_locks (id_document, id_person_locked_by, lock_expires_at, is_active)
+VALUES (
+    (SELECT id_document FROM documents LIMIT 1),
+    (SELECT id_person FROM persons OFFSET 1 LIMIT 1),
+    now() + interval '1 hour',
+    TRUE
+);
+SELECT is_active, lock_expires_at FROM editing_locks
+WHERE id_document = (SELECT id_document FROM documents LIMIT 1)
+ORDER BY id_editing_lock;
+ROLLBACK;

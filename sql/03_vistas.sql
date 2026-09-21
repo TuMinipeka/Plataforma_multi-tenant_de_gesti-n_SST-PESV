@@ -3,6 +3,9 @@
 --  Base de datos : examen   (esquema public)
 --  Cubre la seccion "Consultas orientadas a vistas y vistas materializadas"
 --  del enunciado (items 1-8) y sirve de base a las avanzadas 10, 22 y 25.
+--
+--  Debajo de cada vista hay una consulta de prueba (solo SELECT, no
+--  modifica datos) que la usa, para comprobar que funciona correctamente.
 -- =====================================================================
 
 BEGIN;
@@ -32,6 +35,12 @@ LEFT JOIN positions po ON po.id_position = p.id_position;
 COMMENT ON VIEW vw_tenant_persons IS
     'Empresas con sus personas y el cargo que ocupan (LEFT JOIN: incluye personas sin cargo aun)';
 
+-- Prueba: personas de Constructora Andina con su cargo
+SELECT full_name, position_name
+FROM vw_tenant_persons
+WHERE tenant_nit = '900111222-3'
+ORDER BY full_name;
+
 -- ---------------------------------------------------------------------
 -- 2. vw_tenant_geography
 --    Empresa con municipio, departamento y pais.
@@ -50,6 +59,11 @@ JOIN countries c        ON c.id_country = d.id_country;
 
 COMMENT ON VIEW vw_tenant_geography IS
     'Ubicacion geografica completa de cada empresa (municipio, departamento, pais)';
+
+-- Prueba: ubicacion de todas las empresas
+SELECT tenant_name, municipality_name, department_name, country_name
+FROM vw_tenant_geography
+ORDER BY tenant_name;
 
 -- ---------------------------------------------------------------------
 -- 3. vw_tenant_modules
@@ -72,6 +86,12 @@ JOIN type_system_sst ts ON ts.id_type_system_sst = m.id_type_system_sst;
 
 COMMENT ON VIEW vw_tenant_modules IS
     'Modulos habilitados por cada empresa, con el sistema de gestion al que pertenecen';
+
+-- Prueba: modulos SST habilitados para Transportes del Valle
+SELECT module_title, is_enabled
+FROM vw_tenant_modules
+WHERE tenant_name = 'Transportes del Valle Ltda' AND system_code = 'SST'
+ORDER BY module_title;
 
 -- ---------------------------------------------------------------------
 -- 4. vw_tenant_templates_phva
@@ -96,6 +116,11 @@ ORDER BY t.tenant_name, ph.phva_stage_order;
 COMMENT ON VIEW vw_tenant_templates_phva IS
     'Total de plantillas activas asignadas a cada empresa, agrupadas por etapa PHVA';
 
+-- Prueba: plantillas por etapa PHVA de todas las empresas
+SELECT tenant_name, phva_stage_name, total_templates
+FROM vw_tenant_templates_phva
+ORDER BY tenant_name, phva_stage_name;
+
 -- ---------------------------------------------------------------------
 -- 5. vw_tenant_positions
 --    Total de personas por empresa y cargo.
@@ -116,6 +141,11 @@ ORDER BY t.tenant_name, po.position_name;
 COMMENT ON VIEW vw_tenant_positions IS
     'Total de personas registradas por empresa y cargo (LEFT JOIN: incluye cargos sin nadie asignado)';
 
+-- Prueba: cargos y cuantas personas tiene cada uno, por empresa
+SELECT tenant_name, position_name, total_persons
+FROM vw_tenant_positions
+ORDER BY tenant_name, position_name;
+
 -- ---------------------------------------------------------------------
 -- 6. vw_tenant_summary
 --    Vista de apoyo (no pedida explicitamente, pero la usan las avanzadas
@@ -135,6 +165,11 @@ FROM tenants t;
 
 COMMENT ON VIEW vw_tenant_summary IS
     'Consolidado por empresa: personas, modulos habilitados, plantillas activas y sistemas habilitados';
+
+-- Prueba: resumen de las 4 empresas
+SELECT tenant_name, is_active, total_persons, total_modules, total_templates, total_systems
+FROM vw_tenant_summary
+ORDER BY tenant_name;
 
 -- =====================================================================
 -- Vistas materializadas
@@ -180,6 +215,11 @@ CREATE INDEX ix_vm_template_sst_docs_summary_pct
 COMMENT ON MATERIALIZED VIEW vm_template_sst_docs_summary IS
     'Resumen consolidado de documentos del sistema SST por empresa (total/finalizados/borrador/pendientes/no iniciados/porcentaje)';
 
+-- Prueba: cumplimiento SST de todas las empresas, de menor a mayor
+SELECT tenant_name, total_docs, finalized_docs, compliance_percentage
+FROM vm_template_sst_docs_summary
+ORDER BY compliance_percentage;
+
 -- ---------------------------------------------------------------------
 -- 8. vm_template_pesv_docs_summary
 --    Igual que la anterior, pero para el sistema PESV.
@@ -217,10 +257,15 @@ CREATE INDEX ix_vm_template_pesv_docs_summary_pct
 COMMENT ON MATERIALIZED VIEW vm_template_pesv_docs_summary IS
     'Resumen consolidado de documentos del sistema PESV por empresa (total/finalizados/borrador/pendientes/no iniciados/porcentaje)';
 
+-- Prueba: cumplimiento PESV de todas las empresas, de mayor a menor
+SELECT tenant_name, total_docs, finalized_docs, compliance_percentage
+FROM vm_template_pesv_docs_summary
+ORDER BY compliance_percentage DESC;
+
 COMMIT;
 
 -- =====================================================================
--- Verificacion rapida
+-- Verificacion rapida (resumen de todo lo anterior en un solo bloque)
 -- =====================================================================
 \echo === vw_tenant_persons (muestra) ===
 SELECT tenant_name, full_name, position_name FROM vw_tenant_persons ORDER BY tenant_name LIMIT 5;
