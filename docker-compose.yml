@@ -1,0 +1,34 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: sst_pesv_db
+    environment:
+      POSTGRES_USER: sst_admin
+      POSTGRES_PASSWORD: sst_admin
+      POSTGRES_DB: examen
+    ports:
+      - "5434:5432"
+    volumes:
+      - sst_pesv_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sst_admin -d examen"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: sst_pesv_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "8090:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  sst_pesv_data:
