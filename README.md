@@ -108,7 +108,7 @@ bien.
 ### Establece la conexion con pgAdmin
 
 ```bash
-Host name/adress: Postgres
+Host name/adress: postgres
 Port: 5432
 Maintance database: examen
 Username: sst_admin
