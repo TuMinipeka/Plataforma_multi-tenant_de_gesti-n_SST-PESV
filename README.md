@@ -65,6 +65,11 @@ mismo diseño que implementa `sql/01_schema.sql`.
 El repositorio incluye un `docker-compose.yml` propio: no hace falta tener PostgreSQL instalado,
 solo Docker.
 
+> 🆕 **¿Primera vez usando Docker o la terminal?** Sigue la guía paso a paso, escrita para
+> principiantes y con instrucciones separadas para Windows, Mac y Linux:
+> **[docs/00_instalar_docker.md](docs/00_instalar_docker.md)**. El resumen rápido de abajo asume
+> que Docker ya está instalado y funcionando.
+
 ```bash
 # 1. Levantar PostgreSQL 16 y pgAdmin en segundo plano
 docker compose up -d
@@ -83,10 +88,12 @@ Esto crea dos contenedores:
 ### Cargar el esquema y los datos de prueba
 
 Todo el montaje (tablas, restricciones, índices, datos de ejemplo y vistas) vive en **un solo
-archivo**, pensado para pegarse completo en el *Query Tool* de pgAdmin o ejecutarse por terminal:
+archivo**, pensado para pegarse completo en el *Query Tool* de pgAdmin o copiarse al contenedor y
+ejecutarse por terminal (dos comandos, iguales en Windows, Mac y Linux):
 
 ```bash
-docker exec -i sst_pesv_db psql -U sst_admin -d examen -f sql/00_examen_completo.sql
+docker cp sql/00_examen_completo.sql sst_pesv_db:/tmp/00_examen_completo.sql
+docker exec -i sst_pesv_db psql -U sst_admin -d examen -f /tmp/00_examen_completo.sql
 ```
 
 El script es idempotente: empieza limpiando cualquier objeto previo, así que se puede volver a
@@ -113,6 +120,7 @@ docker compose down -v       # además borra los datos guardados
 examen-sst-pesv/
 ├── docker-compose.yml           PostgreSQL 16 + pgAdmin, listos para levantar
 ├── docs/
+│   ├── 00_instalar_docker.md    Guía de Docker para principiantes (Windows / Mac / Linux)
 │   ├── 01_normalizacion_4FN.md  Análisis del enunciado y normalización 1FN → 4FN
 │   ├── 02_modelo_conceptual.md  Especificación del modelo conceptual (notación Chen)
 │   ├── 03_modelo_fisico.md      Traducción a tablas, restricciones e índices
